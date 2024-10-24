@@ -1,1 +1,164 @@
+index
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cacti Dashboard</title>
+    <link rel="stylesheet" href="/static/Style.css">
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // JavaScript function to show/hide the date and time inputs based on title selection
+        function showDateTimeInputs() {
+            const dateTimeSection = document.getElementById('date-time-section');
+            dateTimeSection.style.display = 'block';
+        }
+    </script>
+</head>
+<body>
+    <header>
+        <h1>CACTI DASHBOARD</h1>
+    </header>
+
+    <div class="container">
+        <!-- Sidebar with Titles -->
+        <div class="sidebar">
+            <h2>Titles</h2>
+            <div class="title-box">
+                <ul id="title-list">
+                    {% for title in titles %}
+                    <li>
+                        <a href="javascript:void(0)" onclick="document.getElementById('selected_title').value='{{ title }}'; showDateTimeInputs();">{{ title }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Content: Add New URL, Data Selection, and Results -->
+        <div class="main-content">
+            <h3>Add New URL</h3>
+            <form method="POST" action="/add-url">
+                <label for="new_url">New URL:</label>
+                <input type="url" id="new_url" name="new_url" required>
+                <button type="submit">Add URL</button>
+            </form>
+
+            <h2>Data Selection</h2>
+            <form method="POST" action="/">
+                <input type="hidden" id="selected_title" name="title">
+                
+                <div id="date-time-section" style="display: none;">
+                    <label for="start_date">Start Date:</label>
+                    <input type="date" id="start_date" name="start_date" required>
+
+                    <label for="start_time">Start Time:</label>
+                    <input type="time" id="start_time" name="start_time" required>
+
+                    <label for="end_date">End Date:</label>
+                    <input type="date" id="end_date" name="end_date" required>
+
+                    <label for="end_time">End Time:</label>
+                    <input type="time" id="end_time" name="end_time" required>
+
+                    <button type="submit">Fetch Data</button>
+                </div>
+            </form>
+
+            <h2>Results</h2>
+            {% if results %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Date</th>
+                        <th>Inbound (Gbps)</th>
+                        <th>Outbound (Gbps)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in results %}
+                    <tr>
+                        <td>{{ row['Title'] }}</td>
+                        <td>{{ row['Date'] }}</td>
+                        <td>{{ row['Inbound_Gbps'] }}</td>
+                        <td>{{ row['Outbound_Gbps'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Bar Chart Container -->
+            <canvas id="bandwidthChart" width="200" height="100"></canvas>
+
+            <!-- Safely inject the results as JSON -->
+            <script type="application/json" id="results-json">
+                {{ results | tojson }}
+            </script>
+
+            <script>
+                // Get the JSON data from the script tag
+                const fetchedResults = JSON.parse(document.getElementById('results-json').textContent);
+                
+                const labels = fetchedResults.map(row => row.Date);
+                const inboundData = fetchedResults.map(row => row.Inbound_Gbps);
+                const outboundData = fetchedResults.map(row => row.Outbound_Gbps);
+                const title = fetchedResults[0] ? fetchedResults[0].Title : 'Bandwidth Usage'; 
+
+                const ctx = document.getElementById('bandwidthChart').getContext('2d');
+                const bandwidthChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Inbound (Gbps)',
+                                data: inboundData,
+                                backgroundColor: 'yellow'
+                            },
+                            {
+                                label: 'Outbound (Gbps)',
+                                data: outboundData,
+                                backgroundColor: 'blue'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Bandwidth Usage (Gbps)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            title: {
+                                display: true,
+                                text: title
+                            }
+                        }
+                    }
+                });
+            </script>
+
+            {% else %}
+            <p>No data available for the selected criteria.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
