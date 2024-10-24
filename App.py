@@ -14,7 +14,7 @@ app = Flask(__name__)
 db_config = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'jeba',
+    'password': 'your password',
     'database': 'Cacti_Database'
 }
 
@@ -59,7 +59,7 @@ def fetch_data_by_title_and_date(title, start_datetime, end_datetime):
 def add_url_to_database(url):
     try:
         session = requests.Session()
-        login_url = 'http://203.76.96.178/cacti/index.php'
+        login_url = 'put_your_login_url'
 
         # Step 1: Log in to the cacti system
         login_page = session.get(login_url)
@@ -69,8 +69,8 @@ def add_url_to_database(url):
         payload = {
             '__csrf_magic': csrf_token,
             'action': 'login',
-            'login_username': 'noc',
-            'login_password': 'noc@2024',
+            'login_username': 'username',
+            'login_password': 'password',
             'remember_me': 'on'
         }
 
