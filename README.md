@@ -1,4 +1,4 @@
-##Cacti Dashboard
+#Cacti Dashboard
 A Flask web application designed to interface with a MySQL database and display Cacti network monitoring data. 
 
 ## Overview
