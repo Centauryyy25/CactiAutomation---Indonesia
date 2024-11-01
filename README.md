@@ -1,5 +1,6 @@
-#Cacti Dashboard
-A Flask web application designed to interface with a MySQL database and display Cacti network monitoring data. 
+# Cacti Dashboard
+
+A Flask web application designed to interface with a MySQL database and display Cacti network monitoring data.
 
 ## Overview
 This application serves as a dashboard for Cacti network monitoring data. Users can:
