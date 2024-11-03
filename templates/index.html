@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,13 +7,7 @@
     <link rel="stylesheet" href="/static/Style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // JavaScript function to show/hide the date and time inputs based on title selection
-        function showDateTimeInputs() {
-            const dateTimeSection = document.getElementById('date-time-section');
-            dateTimeSection.style.display = 'block';
-        }
-    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </head>
 <body>
     <header>
@@ -96,65 +89,6 @@
             <script type="application/json" id="results-json">
                 {{ results | tojson }}
             </script>
-
-            <script>
-                // Get the JSON data from the script tag
-                const fetchedResults = JSON.parse(document.getElementById('results-json').textContent);
-                
-                const labels = fetchedResults.map(row => row.Date);
-                const inboundData = fetchedResults.map(row => row.Inbound_Gbps);
-                const outboundData = fetchedResults.map(row => row.Outbound_Gbps);
-                const title = fetchedResults[0] ? fetchedResults[0].Title : 'Bandwidth Usage'; 
-
-                const ctx = document.getElementById('bandwidthChart').getContext('2d');
-                const bandwidthChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Inbound (Gbps)',
-                                data: inboundData,
-                                backgroundColor: 'yellow'
-                            },
-                            {
-                                label: 'Outbound (Gbps)',
-                                data: outboundData,
-                                backgroundColor: 'blue'
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                title: {
-                                    display: true,
-                                    text: 'Bandwidth Usage (Gbps)'
-                                }
-                            },
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Time'
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top'
-                            },
-                            title: {
-                                display: true,
-                                text: title
-                            }
-                        }
-                    }
-                });
-            </script>
-
             {% else %}
             <p>No data available for the selected criteria.</p>
             {% endif %}
