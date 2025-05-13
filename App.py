@@ -1,161 +1,142 @@
-from flask import Flask, render_template, request, redirect, url_for
-import mysql.connector
-from mysql.connector import Error
-import requests
-from bs4 import BeautifulSoup
-import re
-import csv
-import pandas as pd
-from datetime import datetime
+from flask import Flask, render_template, request, redirect, send_file, jsonify, Response
+import os
+from flask_cors import CORS
+from datetime import datetime, timedelta
+import json
+import time
+from threading import Thread, Lock
+from progress_tracker import progress
 
 app = Flask(__name__)
+CORS(app)
+worker_thread = None
+pipeline_lock = Lock()
 
-# MySQL connection configuration
-db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'your password',
-    'database': 'Cacti_Database'
-}
 
-# Function to fetch unique titles from the database
-def get_unique_titles():
+def execute_pipeline(date1, date2, target_url, userLogin, userpass, usernames):
     try:
-        connection = mysql.connector.connect(**db_config)
-        cursor = connection.cursor()
-        cursor.execute("SELECT DISTINCT Title FROM Cacti_Table")
-        titles = [row[0] for row in cursor.fetchall()]
-        return titles
-    except Error as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
+        from main_pipeline import step1_scrape_images, step2_ocr_images, step3_clean_csv
 
-# Function to fetch data from the database within a specific date range
-def fetch_data_by_title_and_date(title, start_datetime, end_datetime):
-    try:
-        connection = mysql.connector.connect(**db_config)
-        cursor = connection.cursor(dictionary=True)  # Get results as a dictionary
-        query = """
-        SELECT Title, Date, Inbound_Gbps, Outbound_Gbps 
-        FROM Cacti_Table 
-        WHERE Title = %s AND Date BETWEEN %s AND %s
-        """
-        cursor.execute(query, (title, start_datetime, end_datetime))
-        results = cursor.fetchall()
-        return results
-    except Error as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
+        step1_scrape_images(date1, date2, target_url, userLogin, userpass, usernames)
+        step2_ocr_images()
+        step3_clean_csv()
 
-# Function to process a new URL and add the title and data to the database
-def add_url_to_database(url):
-    try:
-        session = requests.Session()
-        login_url = 'put_your_login_url'
-
-        # Step 1: Log in to the cacti system
-        login_page = session.get(login_url)
-        soup = BeautifulSoup(login_page.text, 'html.parser')
-        csrf_token = soup.find('input', {'name': '__csrf_magic'})['value']
-
-        payload = {
-            '__csrf_magic': csrf_token,
-            'action': 'login',
-            'login_username': 'username',
-            'login_password': 'password',
-            'remember_me': 'on'
-        }
-
-        login_response = session.post(login_url, data=payload)
-
-        if not login_response.ok:
-            return "Failed to log in to Cacti."
-
-        # Step 2: Download the CSV file from the provided URL
-        csv_response = session.get(url)
-        if not csv_response.ok:
-            return "Failed to download CSV file."
-
-        # Step 3: Extract the title and data from the CSV file
-        try:
-            # Read the CSV data from the response content
-            data = csv_response.content.decode('utf-8').splitlines()
-            reader = csv.reader(data)
-            title_row = next(reader)
-            title = title_row[1]  # Extract the title from the second column
-            safe_title = re.sub(r'[<>:"/\\|?*]', '', title).strip()  # Sanitize the title
-
-            # Find the "Date" row to identify the header
-            headers = next(row for row in reader if row[0].startswith('Date'))
-
-            # Create a pandas DataFrame from the remaining rows
-            df = pd.DataFrame(reader, columns=headers)
-            df['Inbound'] = df['Inbound'].astype(float) / 8_000_000_000  # Convert bits to gigabits
-            df['Outbound'] = df['Outbound'].astype(float) / 8_000_000_000
-
-            # Step 4: Insert data into the database
-            connection = mysql.connector.connect(**db_config)
-            cursor = connection.cursor()
-
-            # Insert each row into the database
-            for index, row in df.iterrows():
-                insert_query = """
-                INSERT IGNORE INTO Cacti_Table (Title, Date, Inbound_Gbps, Outbound_Gbps) 
-                VALUES (%s, %s, %s, %s)
-                """
-                cursor.execute(insert_query, (safe_title, row['Date'], row['Inbound'], row['Outbound']))
-            connection.commit()
-
-        except Exception as e:
-            return f"An error occurred while processing the URL: {e}"
-
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
-        return "Title and data added successfully!"
+        with pipeline_lock:
+            progress.scraping.update({
+                'status': 'complete',
+                'message': 'Proses selesai!'
+            })
 
     except Exception as e:
-        return f"An error occurred: {e}"
+        with pipeline_lock:
+            progress.scraping.update({
+                'status': 'error',
+                'message': f"Error: {str(e)}"
+            })
 
-# Route to display the index page and titles
-@app.route('/', methods=['GET', 'POST'])
+
+@app.route('/')
 def index():
-    titles = get_unique_titles()  # Fetch unique titles from the database
-    results = None
+    today = datetime.now()
+    one_month_ago = today - timedelta(days=30)
 
-    if request.method == 'POST':
-        title = request.form.get('title')
-        start_date = request.form.get('start_date')
-        start_time = request.form.get('start_time')
-        end_date = request.form.get('end_date')
-        end_time = request.form.get('end_time')
+    default_date1 = one_month_ago.strftime("%Y-%m-%dT%H:%M")
+    default_date2 = today.strftime("%Y-%m-%dT%H:%M")
 
-        if title and start_date and start_time and end_date and end_time:
-            start_datetime = f"{start_date} {start_time}:00"
-            end_datetime = f"{end_date} {end_time}:00"
+    return render_template('index.html',
+                           default_date1=default_date1,
+                           default_date2=default_date2,
+                           default_url="https://nms.cbn.id/")
 
-            results = fetch_data_by_title_and_date(title, start_datetime, end_datetime)
 
-    return render_template('index.html', titles=titles, results=results)
+@app.route('/progress')
+def progress_stream():
+    def generate():
+        last_id = 0
+        while True:
+            try:
+                with pipeline_lock:
+                    data = {
+                        'scraping': progress.scraping,
+                        'ocr': progress.ocr
+                    }
+                yield f"id: {last_id}\ndata: {json.dumps(data)}\n\n"
+                last_id += 1
+                time.sleep(0.5)
+            except GeneratorExit:
+                print("Client disconnected")
+                break
+            except Exception as e:
+                print(f"SSE Error: {str(e)}")
+                time.sleep(1)
 
-# Route to handle adding a new URL
-@app.route('/add-url', methods=['POST'])
-def add_url():
-    new_url = request.form.get('new_url')
-    if new_url:
-        message = add_url_to_database(new_url)
-        print(message)  # You can handle this message appropriately
-    return redirect(url_for('index'))
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache'}
+    )
+
+
+@app.route('/run_pipeline', methods=['POST'])
+def run_pipeline():
+    global worker_thread
+    try:
+        with pipeline_lock:
+            progress.scraping.update({
+                'current': 0,
+                'total': 4,
+                'message': 'Memulai proses...',
+                'status': 'running',
+                'current_file': ''
+            })
+            progress.ocr.update({
+                'current': 0,
+                'total': 1,
+                'message': 'Menunggu...',
+                'status': 'idle',
+                'current_file': ''
+            })
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        usernames_input = data['usernames'].strip()
+        if not usernames_input:
+            return jsonify({"status": "error", "message": "Usernames cannot be empty"}), 400
+        # Split dan bersihkan usernames
+        usernames = [u.strip() for u in usernames_input.split(",") if u.strip()]
+        
+        # Pastikan ada usernames valid
+        if not usernames:
+            return jsonify({"status": "error", "message": "No valid usernames provided"}), 400
+        
+        date1 = data.get('date1')
+        date2 = data.get('date2')
+        target_url = data.get('target_url')
+        userLogin = data.get('userLogin')
+        userpass = data.get('userPass')
+
+        worker_thread = Thread(
+            target=execute_pipeline,
+            args=(date1, date2, target_url, userLogin, userpass, usernames),
+            daemon=True
+        )
+        worker_thread.start()
+
+        return jsonify({"status": "started"}), 202
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/download')
+def download_csv():
+    path = "hasil_mbps.csv"
+    if os.path.exists(path):
+        return send_file(path, as_attachment=True)
+    return "File tidak ditemukan"
+
 
 if __name__ == '__main__':
     app.run(debug=True)
