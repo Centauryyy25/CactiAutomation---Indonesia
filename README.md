@@ -3,10 +3,10 @@
 A Flask web application designed to interface with a MySQL database and display Cacti network monitoring data.
 
 ## Overview
-This application serves as a dashboard for Cacti network monitoring data. Users can:
-- Select unique titles from the database and fetch data within a specified date range.
-- Add new CSV data from a Cacti system by providing URLs, which are then processed and stored.
-- Visualize inbound and outbound traffic in Gbps with clear bar charts.
+Aplikasi ini berfungsi sebagai dashboard untuk data monitoring jaringan dari Cacti. Pengguna dapat:
+- Memilih judul unik dari database dan mengambil data berdasarkan rentang tanggal tertentu.
+- Menambahkan data CSV baru dari sistem Cacti dengan memasukkan URL, yang kemudian akan diproses dan disimpan.
+- Menampilkan visualisasi lalu lintas masuk dan keluar (inbound & outbound) dalam satuan Gbps melalui grafik batang yang jelas.
 
 ## Features
 - **Data Retrieval**: Query network traffic data from the MySQL database using titles and date ranges.
